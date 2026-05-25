@@ -21,10 +21,23 @@ export default function Navbar() {
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (user) {
-        const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-        setProfile(data);
+
+    const fetchProfile = async (userId: string) => {
+      const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
+      setProfile(data);
+    };
+
+    // Initial check
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) fetchProfile(user.id);
+    });
+
+    // Listen for auth state changes (login/logout) — updates navbar instantly
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        fetchProfile(session.user.id);
+      } else if (event === 'SIGNED_OUT') {
+        setProfile(null);
       }
     });
 
@@ -33,6 +46,10 @@ export default function Navbar() {
       setAnnouncements(data || []);
     };
     fetchAnns();
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const switchLocale = () => {
